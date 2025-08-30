@@ -10,6 +10,8 @@ A terminal-based video player that transforms videos into high-quality pixel art
 - FFmpeg installed on your system (for audio extraction)
 - Sufficient terminal size (recommended: at least 120×60 characters)
 
+
+
 ## Usage
 
 ### Basic Commands
@@ -35,24 +37,7 @@ python pixelplay.py path/to/video.mp4
 - **Ctrl+C**: Stop playback and exit
 - The player automatically cleans up temporary files after playback
 
-### Examples
 
-```bash
-# Play with default 64-color palette
-python pixelplay.py "https://youtube.com/watch?v=VIDEO_ID"
-
-# Play with true 24-bit RGB colors (best quality)
-python pixelplay.py video.mp4 --true-color
-
-# Play with default 256-color adaptive palette
-python pixelplay.py movie.mkv
-
-# Play a local file with default settings
-python pixelplay.py ~/Movies/sample.mp4
-
-# Show help message
-python pixelplay.py --help
-```
 
 ## Technical Details
 
