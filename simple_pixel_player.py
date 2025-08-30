@@ -13,6 +13,8 @@ import time
 import pygame
 import shutil
 import sys
+import signal
+import atexit
 from pathlib import Path
 from typing import Optional, Tuple
 import threading
@@ -235,6 +237,22 @@ class SimplePixelPlayer:
         
         frame_duration_ms = 1000.0 / fps
         
+        # Setup cleanup handler
+        def cleanup_terminal():
+            sys.stdout.write('\x1b[?25h')    # Show cursor
+            sys.stdout.write('\x1b[?1049l')  # Return to main screen buffer
+            sys.stdout.flush()
+        
+        # Register cleanup for unexpected exits
+        atexit.register(cleanup_terminal)
+        signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
+        
+        # Setup terminal for flicker-free playback
+        sys.stdout.write('\x1b[?1049h')  # Switch to alternate screen buffer
+        sys.stdout.write('\x1b[?25l')    # Hide cursor
+        sys.stdout.write('\x1b[2J')      # Clear screen once
+        sys.stdout.flush()
+        
         try:
             frame_num = 0
             self.frame_count = 0
@@ -272,7 +290,8 @@ class SimplePixelPlayer:
                 
                 rendered = self.render_frame(processed)
                 
-                sys.stdout.write('\x1b[2J\x1b[H' + rendered)
+                # Move cursor home without clearing screen
+                sys.stdout.write('\x1b[H' + rendered)
                 sys.stdout.flush()
                 
                 if not (audio_started and pygame.mixer.get_init() and pygame.mixer.music.get_busy()):
@@ -284,10 +303,15 @@ class SimplePixelPlayer:
                 frame_num += 1
                 
         except KeyboardInterrupt:
-            print("\n\n⏹️  Stopped")
+            pass  # Clean exit
         finally:
             cap.release()
             self.stop_audio()
+            
+            # Restore terminal
+            cleanup_terminal()
+            atexit.unregister(cleanup_terminal)
+            print("\n⏹️  Stopped")
     
     
     
