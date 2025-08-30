@@ -117,7 +117,11 @@ class SimplePixelPlayer:
     
     def generate_adaptive_palette(self, frame: np.ndarray):
         """Generate adaptive palette from frame using k-means clustering"""
-        from sklearn.cluster import MiniBatchKMeans
+        try:
+            from sklearn.cluster import MiniBatchKMeans
+        except ImportError:
+            # Fallback to fixed palette if sklearn not available
+            return
         
         # Sample pixels from frame for efficiency
         h, w = frame.shape[:2]
@@ -250,25 +254,47 @@ class SimplePixelPlayer:
         print("   Press Ctrl+C to stop\n")
         
         # Extract and play audio in background
-        audio_thread = self.start_audio(video_path)
+        audio_thread, audio_started = self.start_audio(video_path)
         
-        # Calculate frame skip for target FPS
-        frame_skip = max(1, int(fps / self.target_fps))
+        # Calculate frame timing
+        frame_duration_ms = 1000.0 / fps  # Duration of each frame in milliseconds
         
         try:
             frame_num = 0
             self.frame_count = 0  # For adaptive palette
+            
+            # Wait for audio to start if available
+            if audio_started:
+                time.sleep(0.1)  # Small delay to let audio start
+            
             start_time = time.time()
             
             while True:
+                # Audio sync: Get current audio position if available
+                if audio_started and pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                    # Get audio position in milliseconds
+                    audio_pos_ms = pygame.mixer.music.get_pos()
+                    if audio_pos_ms > 0:  # Valid position
+                        # Calculate which frame should be displayed
+                        target_frame = int(audio_pos_ms / frame_duration_ms)
+                        
+                        # Skip frames if video is behind audio
+                        while frame_num < target_frame and cap.isOpened():
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            frame_num += 1
+                        
+                        # If video is ahead of audio, wait
+                        if frame_num > target_frame + 2:  # Allow 2 frame tolerance
+                            wait_time = (frame_num - target_frame) * frame_duration_ms / 1000.0
+                            time.sleep(min(wait_time, 0.1))  # Cap wait time
+                            continue
+                
+                # Read frame
                 ret, frame = cap.read()
                 if not ret:
                     break
-                
-                # Skip frames to match target FPS
-                if frame_num % frame_skip != 0:
-                    frame_num += 1
-                    continue
                 
                 # Convert BGR to RGB
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -284,11 +310,12 @@ class SimplePixelPlayer:
                 sys.stdout.write('\x1b[2J\x1b[H' + rendered)
                 sys.stdout.flush()
                 
-                # Frame timing
-                elapsed = time.time() - start_time
-                target_time = (frame_num / frame_skip) * self.frame_time
-                if target_time > elapsed:
-                    time.sleep(target_time - elapsed)
+                # If no audio sync, use simple timing
+                if not (audio_started and pygame.mixer.get_init() and pygame.mixer.music.get_busy()):
+                    elapsed = time.time() - start_time
+                    target_time = frame_num * frame_duration_ms / 1000.0
+                    if target_time > elapsed:
+                        time.sleep(target_time - elapsed)
                 
                 frame_num += 1
                 
@@ -298,8 +325,8 @@ class SimplePixelPlayer:
             cap.release()
             self.stop_audio()
     
-    def start_audio(self, video_path: str) -> Optional[threading.Thread]:
-        """Start audio playback in background"""
+    def start_audio(self, video_path: str) -> Tuple[Optional[threading.Thread], bool]:
+        """Start audio playback in background, returns (thread, success)"""
         try:
             # Extract audio to temp file
             import tempfile
@@ -312,24 +339,37 @@ class SimplePixelPlayer:
                 '-ab', '192k', '-y',
                 audio_file
             ]
-            subprocess.run(cmd, capture_output=True, check=True)
+            result = subprocess.run(cmd, capture_output=True)
+            
+            if result.returncode != 0:
+                print(f"⚠️  Audio extraction failed, playing video without sound")
+                return None, False
+            
+            # Initialize pygame mixer with appropriate settings
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
             
             # Play audio
             def play_audio():
-                pygame.mixer.init()
-                pygame.mixer.music.load(audio_file)
-                pygame.mixer.music.play()
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.1)
-                Path(audio_file).unlink(missing_ok=True)
+                try:
+                    pygame.mixer.music.load(audio_file)
+                    pygame.mixer.music.play()
+                    while pygame.mixer.music.get_busy():
+                        time.sleep(0.1)
+                except Exception as e:
+                    print(f"⚠️  Audio playback error: {e}")
+                finally:
+                    try:
+                        Path(audio_file).unlink(missing_ok=True)
+                    except:
+                        pass
             
-            thread = threading.Thread(target=play_audio)
+            thread = threading.Thread(target=play_audio, daemon=True)
             thread.start()
-            return thread
+            return thread, True
             
         except Exception as e:
             print(f"⚠️  Audio disabled: {e}")
-            return None
+            return None, False
     
     def stop_audio(self):
         """Stop audio playback"""
@@ -337,8 +377,8 @@ class SimplePixelPlayer:
             if pygame.mixer.get_init():
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
-        except:
-            pass
+        except Exception:
+            pass  # Silently ignore if mixer wasn't initialized
 
 class VideoDownloader:
     """Simple YouTube downloader"""

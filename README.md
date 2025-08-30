@@ -13,14 +13,35 @@ A terminal-based video player that transforms videos into high-quality pixel art
   - **True Color Mode**: Full 24-bit RGB without palette quantization for best quality
   - **Adaptive Palette**: Dynamic palette that adjusts to video content every 30 frames
 - **Advanced Dithering**: Implements Bayer matrix ordered dithering for smooth gradients
-- **Synchronized Audio**: Plays audio through pygame with proper frame synchronization
+- **Enhanced Audio/Video Synchronization**: Advanced sync mechanism using real-time audio position tracking
 - **Adaptive Performance**: Maintains consistent 15 FPS playback with intelligent frame skipping
+- **Robust Error Recovery**: Graceful fallback behaviors when audio or features are unavailable
 
 ### Visual Quality
 - **Unicode Half-Blocks**: Uses `▀`, `▄`, and `█` characters for double vertical resolution
 - **24-bit True Color**: Full RGB color support for modern terminals
 - **Smart Color Quantization**: KD-tree based nearest neighbor search for fast palette matching
 - **Optimized Rendering**: Special handling for black pixels and similar colors to reduce artifacts
+
+## Recent Improvements
+
+### Enhanced Audio/Video Synchronization
+- Implemented real-time audio position tracking using `pygame.mixer.music.get_pos()`
+- Dynamic frame adjustment that skips frames when video lags or waits when ahead
+- Maintains perfect sync with 2-frame tolerance throughout playback
+- Optimized pygame.mixer initialization (44100Hz, 16-bit, stereo, 512 buffer)
+
+### Improved Error Handling
+- Graceful fallback when audio extraction fails - video plays silently without interruption
+- Adaptive palette mode automatically falls back to fixed palette if scikit-learn is unavailable
+- Better pygame.mixer initialization with optimized audio settings
+- Daemon threads ensure proper cleanup on exit
+
+### Bug Fixes
+- Fixed initialization order bug where `current_palette` was accessed before initialization
+- Resolved pygame.mixer errors when audio extraction fails
+- Improved audio thread management with comprehensive error handling
+- Enhanced stability across different video formats and system configurations
 
 ## Installation
 
@@ -53,6 +74,8 @@ venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
+
+**Note:** After updates, always run `pip install -r requirements.txt` again to ensure all dependencies are installed, including scikit-learn for adaptive palette mode.
 
 4. Verify FFmpeg installation:
 ```bash
@@ -157,6 +180,8 @@ When using `--adaptive`, the player:
 4. Smoothly transitions to the new palette for better color representation
 5. Particularly effective for videos with changing color schemes
 
+**Note:** If scikit-learn is not installed, the player gracefully falls back to the fixed 64-color palette mode.
+
 ### Performance Optimizations
 
 - **Frame Skipping**: Intelligently skips frames to maintain target FPS
@@ -213,14 +238,19 @@ pixel/
 - Ensure your system isn't under heavy load
 
 **"Audio out of sync"**
-- This can happen with variable framerate videos
-- Try converting the video to constant framerate first
+- The player now features enhanced audio/video synchronization that handles most sync issues automatically
+- For persistent issues with variable framerate videos, try converting to constant framerate first
 
 **"FFmpeg not found"**
 - Install FFmpeg: 
   - macOS: `brew install ffmpeg`
   - Ubuntu/Debian: `sudo apt install ffmpeg`
   - Windows: Download from ffmpeg.org
+- Note: If audio extraction fails, the video will play without sound
+
+**"ImportError for scikit-learn"**
+- Run `pip install -r requirements.txt` to install all dependencies
+- The player will automatically fall back to fixed palette mode if scikit-learn is unavailable
 
 **"Download fails"**
 - Check your internet connection
@@ -274,13 +304,19 @@ The 4×4 Bayer matrix creates the illusion of more colors by adding structured n
 ```
 This pattern is tiled across the image and adds threshold values to pixel colors before quantization, creating smoother gradients with the limited palette.
 
-### Frame Synchronization
+### Audio/Video Synchronization
 
-The player maintains 15 FPS by:
-1. Calculating frame skip ratio based on source video FPS
-2. Using high-precision timing with `time.time()`
-3. Sleeping between frames to maintain consistent timing
-4. Running audio in a separate thread for uninterrupted playback
+The player features an advanced synchronization mechanism that ensures audio and video stay perfectly aligned:
+
+1. **Real-time Audio Position Tracking**: Monitors actual audio playback position using `pygame.mixer.music.get_pos()`
+2. **Dynamic Frame Adjustment**: 
+   - Automatically skips frames when video lags behind audio
+   - Pauses frame display when video is ahead of audio
+   - Maintains sync throughout playback with a 2-frame tolerance
+3. **Optimized Audio Settings**: Pygame mixer initialized with optimal parameters (44100Hz, 16-bit, stereo, 512 buffer)
+4. **Frame Skip Calculation**: Intelligent frame skipping based on source video FPS
+5. **Separate Audio Thread**: Runs audio in dedicated daemon thread for uninterrupted playback
+6. **Graceful Degradation**: If audio extraction fails, video plays silently without interrupting the viewing experience
 
 ## License
 
