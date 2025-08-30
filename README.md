@@ -2,18 +2,6 @@
 
 A terminal-based video player that transforms videos into high-quality pixel art using Unicode half-block characters and ANSI colors. It can download YouTube videos or play local video files directly in your terminal with synchronized audio playback.
 
-## Features
-
-- **YouTube Integration**: Downloads and plays YouTube videos using yt-dlp
-- **Local File Support**: Plays video files supported by OpenCV
-- **Auto-Sizing Resolution**: Adapts to your terminal size for optimal display
-- **Two Color Modes**: 256-color adaptive palette (default) or true 24-bit RGB
-- **Half-Block Rendering**: Uses Unicode characters (`▀`, `▄`, `█`) for double vertical resolution
-- **Audio/Video Sync**: Real-time synchronization with automatic frame adjustment
-- **Bayer Dithering**: Ordered dithering for smoother gradients
-- **Graceful Fallbacks**: Continues playback when audio extraction fails
-
-
 ## Installation
 
 ### Prerequisites
@@ -21,37 +9,6 @@ A terminal-based video player that transforms videos into high-quality pixel art
 - Terminal with 24-bit color support (most modern terminals)
 - FFmpeg installed on your system (for audio extraction)
 - Sufficient terminal size (recommended: at least 120×60 characters)
-
-### Setup
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd pixel
-```
-
-2. Create and activate a virtual environment:
-```bash
-# On macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-
-# On Windows
-python -m venv venv
-venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-**Note:** After updates, always run `pip install -r requirements.txt` again to ensure all dependencies are installed, including scikit-learn for adaptive palette mode.
-
-4. Verify FFmpeg installation:
-```bash
-ffmpeg -version
-```
 
 ## Usage
 
