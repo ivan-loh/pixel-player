@@ -107,9 +107,8 @@ flowchart TD
     
     %% System Architecture
     subgraph system["System Architecture"]
-        cli["pixelplay.py<br/>CLI Entry Point"]
-        core["simple_pixel_player.py"]
-        subgraph corecomp["Core Components"]
+        subgraph pixelplay["pixelplay.py"]
+            cli["CLI Entry Point"]
             player["SimplePixelPlayer<br/>Video Processing"]
             downloader["VideoDownloader<br/>URL Handling"]
         end
@@ -180,7 +179,7 @@ flowchart TD
     classDef outputStyle fill:#fce4ec,stroke:#c2185b,color:#000
     
     class youtube,localfile inputStyle
-    class cli,core,player,downloader systemStyle
+    class cli,player,downloader systemStyle
     class capture,autosize,adaptive,truecolor,dither,render,extract,playback,sync processStyle
     class colormode,decision decisionStyle
     class display,skip,wait outputStyle
@@ -214,8 +213,7 @@ flowchart TD
 ```
 pixel/
 ├── README.md                 # This documentation
-├── pixelplay.py             # Main entry point and CLI
-├── simple_pixel_player.py   # Core video player implementation
+├── pixelplay.py             # All-in-one video player with CLI
 ├── requirements.txt         # Python dependencies
 └── venv/                    # Virtual environment (git-ignored)
 ```
