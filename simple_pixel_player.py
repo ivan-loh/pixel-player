@@ -18,61 +18,27 @@ import atexit
 from pathlib import Path
 from typing import Optional, Tuple
 import threading
-import queue
 
 
 
 class SimplePixelPlayer:
     """Simplified pixel art video player with sensible defaults"""
     
-    PALETTE = np.array([
-        # Grayscale (12 levels for better gradients)
-        [0, 0, 0],       [23, 23, 23],    [46, 46, 46],    [69, 69, 69],
-        [92, 92, 92],    [115, 115, 115], [138, 138, 138], [161, 161, 161],
-        [184, 184, 184], [207, 207, 207], [230, 230, 230], [255, 255, 255],
-        
-        # Primary colors (high saturation)
-        [255, 0, 0],     [0, 255, 0],     [0, 0, 255],     
-        # Primary colors (medium saturation)
-        [192, 0, 0],     [0, 192, 0],     [0, 0, 192],
-        # Primary colors (low saturation)
-        [128, 0, 0],     [0, 128, 0],     [0, 0, 128],
-        
-        # Secondary colors (high saturation)
-        [255, 255, 0],   [255, 0, 255],   [0, 255, 255],
-        # Secondary colors (medium saturation)
-        [192, 192, 0],   [192, 0, 192],   [0, 192, 192],
-        
-        # Orange spectrum
-        [255, 128, 0],   [255, 165, 0],   [255, 192, 64],  [255, 140, 0],
-        
-        # Pink/Purple spectrum  
-        [255, 182, 193], [255, 105, 180], [218, 112, 214], [186, 85, 211],
-        [147, 112, 219], [138, 43, 226],  [128, 0, 128],   [75, 0, 130],
-        
-        # Blue/Cyan spectrum
-        [70, 130, 180],  [100, 149, 237], [135, 206, 235], [0, 191, 255],
-        [64, 224, 208],  [72, 209, 204],  [0, 128, 128],   [32, 178, 170],
-        
-        # Green spectrum
-        [124, 252, 0],   [50, 205, 50],   [0, 250, 154],   [46, 139, 87],
-        [34, 139, 34],   [107, 142, 35],  [128, 128, 0],   [85, 107, 47],
-        
-        # Brown/Beige spectrum
-        [139, 69, 19],   [160, 82, 45],   [205, 133, 63],  [210, 180, 140],
-        [222, 184, 135], [245, 222, 179], [244, 164, 96],  [188, 143, 143],
-        
-        # Skin tones
-        [255, 220, 177], [255, 206, 180], [222, 171, 127], [188, 143, 107]
-    ], dtype=np.uint8)
-    
-    
-    
-    def __init__(self, use_true_color=False, adaptive_palette=False):
+    def __init__(self, use_true_color=False):
         self.use_true_color = use_true_color
-        self.adaptive_palette = adaptive_palette
         
-        self.current_palette = self.PALETTE.copy()
+        # Default is adaptive 8-bit (256 colors)
+        if not self.use_true_color:
+            self.palette_size = 256
+            self.adaptive_palette = True
+            # Generate initial 256-color palette
+            self.current_palette = self._generate_256_palette()
+        else:
+            # True color mode doesn't use palette
+            self.palette_size = 0
+            self.adaptive_palette = False
+            self.current_palette = None
+        
         self.frame_buffer = []
         
         self.term_cols, self.term_rows = shutil.get_terminal_size((80, 24))
@@ -89,11 +55,9 @@ class SimplePixelPlayer:
         print(f"   Effective pixels: {self.width}x{self.height} (with half-blocks)")
         
         if self.use_true_color:
-            print(f"🎨 Color mode: True Color (24-bit RGB)")
-        elif self.adaptive_palette:
-            print(f"🎨 Color mode: Adaptive Palette")
+            print(f"🎨 Color mode: True Color (16.7M colors)")
         else:
-            print(f"🎨 Color mode: Fixed {len(self.PALETTE)}-color palette")
+            print(f"🎨 Color mode: Adaptive 8-bit (256 colors)")
         
         if not self.use_true_color:
             self._build_color_cache()
@@ -101,6 +65,26 @@ class SimplePixelPlayer:
         self.target_fps = 10
         self.frame_time = 1.0 / self.target_fps
         
+    
+    
+    def _generate_256_palette(self):
+        """Generate a well-distributed 256-color palette"""
+        # Create a 6-6-6 RGB cube (216 colors) + 40 grayscale
+        palette = []
+        
+        # RGB cube: 6 levels per channel = 216 colors
+        for r in range(6):
+            for g in range(6):
+                for b in range(6):
+                    palette.append([r * 51, g * 51, b * 51])
+        
+        # Add 40 grayscale levels for smooth gradients
+        for i in range(40):
+            gray = int(i * 255 / 39)
+            palette.append([gray, gray, gray])
+        
+        return np.array(palette[:256], dtype=np.uint8)
+    
     
     
     def _build_color_cache(self):
@@ -122,14 +106,15 @@ class SimplePixelPlayer:
             return
         
         h, w = frame.shape[:2]
-        sample_size = min(5000, h * w)
+        sample_size = min(10000, h * w)
         pixels = frame.reshape(-1, 3)
         
         indices = np.random.choice(pixels.shape[0], sample_size, replace=False)
         sample_pixels = pixels[indices]
         
-        n_colors = len(self.PALETTE)
-        kmeans = MiniBatchKMeans(n_clusters=n_colors, random_state=42, n_init=3)
+        n_colors = self.palette_size
+        # Use 5 iterations for 256 colors
+        kmeans = MiniBatchKMeans(n_clusters=n_colors, random_state=42, n_init=5)
         kmeans.fit(sample_pixels)
         
         self.current_palette = kmeans.cluster_centers_.astype(np.uint8)
@@ -145,7 +130,8 @@ class SimplePixelPlayer:
             return processed
         
         if self.adaptive_palette and hasattr(self, 'frame_count'):
-            if self.frame_count % 30 == 0:
+            # Update palette every 15 frames
+            if self.frame_count % 15 == 0:
                 self.generate_adaptive_palette(processed)
         
         processed = self.apply_dithering(processed)

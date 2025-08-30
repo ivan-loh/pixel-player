@@ -5,9 +5,10 @@ Usage:
     python pixelplay.py <youtube_url or video_file> [options]
     
 Options:
-    --true-color    Use true 24-bit RGB colors (no palette)
-    --adaptive      Use adaptive palette that changes with video content
+    --true-color    Use true 24-bit RGB colors (16.7M colors)
     --help          Show this help message
+    
+Default mode: Adaptive 8-bit palette (256 colors)
 """
 
 import sys
@@ -30,13 +31,12 @@ def print_banner():
 def print_help():
     print(__doc__)
     print("\nColor Modes:")
-    print("  Default        : 64-color fixed palette (fast, good quality)")
-    print("  --true-color   : True 24-bit RGB (best quality, may be slower)")  
-    print("  --adaptive     : Adaptive palette (adjusts to video content)")
+    print("  Default        : Adaptive 8-bit palette (256 colors)")
+    print("  --true-color   : True 24-bit RGB (16.7M colors)")
     print("\nExamples:")
     print("  python pixelplay.py video.mp4")
     print("  python pixelplay.py video.mp4 --true-color")
-    print("  python pixelplay.py https://youtube.com/watch?v=... --adaptive")
+    print("  python pixelplay.py https://youtube.com/watch?v=...")
     sys.exit(0)
 
 
@@ -53,17 +53,10 @@ def main():
     
     input_source = sys.argv[1]
     use_true_color = '--true-color' in sys.argv
-    use_adaptive = '--adaptive' in sys.argv
-    
-    
-    if use_true_color and use_adaptive:
-        print("❌ Error: Cannot use both --true-color and --adaptive")
-        print("Choose one color mode or use default")
-        sys.exit(1)
     
     
     print_banner()
-    player = SimplePixelPlayer(use_true_color=use_true_color, adaptive_palette=use_adaptive)
+    player = SimplePixelPlayer(use_true_color=use_true_color)
     
     
     if input_source.startswith(('http://', 'https://', 'www.')):
