@@ -21,27 +21,57 @@ import queue
 class SimplePixelPlayer:
     """Simplified pixel art video player with sensible defaults"""
     
-    # Optimized 32-color palette for good video representation
+    # Extended 64-color palette for better video representation
     PALETTE = np.array([
-        # Grayscale (8 levels)
-        [0, 0, 0],       [36, 36, 36],    [72, 72, 72],    [109, 109, 109],
-        [145, 145, 145], [182, 182, 182], [218, 218, 218], [255, 255, 255],
-        # Primary colors
+        # Grayscale (12 levels for better gradients)
+        [0, 0, 0],       [23, 23, 23],    [46, 46, 46],    [69, 69, 69],
+        [92, 92, 92],    [115, 115, 115], [138, 138, 138], [161, 161, 161],
+        [184, 184, 184], [207, 207, 207], [230, 230, 230], [255, 255, 255],
+        
+        # Primary colors (high saturation)
         [255, 0, 0],     [0, 255, 0],     [0, 0, 255],     
-        # Secondary colors  
+        # Primary colors (medium saturation)
+        [192, 0, 0],     [0, 192, 0],     [0, 0, 192],
+        # Primary colors (low saturation)
+        [128, 0, 0],     [0, 128, 0],     [0, 0, 128],
+        
+        # Secondary colors (high saturation)
         [255, 255, 0],   [255, 0, 255],   [0, 255, 255],
-        # Warm tones
-        [255, 128, 0],   [255, 192, 128], [139, 69, 19],   [205, 133, 63],
-        # Cool tones
-        [70, 130, 180],  [100, 149, 237], [0, 128, 128],   [46, 139, 87],
+        # Secondary colors (medium saturation)
+        [192, 192, 0],   [192, 0, 192],   [0, 192, 192],
+        
+        # Orange spectrum
+        [255, 128, 0],   [255, 165, 0],   [255, 192, 64],  [255, 140, 0],
+        
+        # Pink/Purple spectrum  
+        [255, 182, 193], [255, 105, 180], [218, 112, 214], [186, 85, 211],
+        [147, 112, 219], [138, 43, 226],  [128, 0, 128],   [75, 0, 130],
+        
+        # Blue/Cyan spectrum
+        [70, 130, 180],  [100, 149, 237], [135, 206, 235], [0, 191, 255],
+        [64, 224, 208],  [72, 209, 204],  [0, 128, 128],   [32, 178, 170],
+        
+        # Green spectrum
+        [124, 252, 0],   [50, 205, 50],   [0, 250, 154],   [46, 139, 87],
+        [34, 139, 34],   [107, 142, 35],  [128, 128, 0],   [85, 107, 47],
+        
+        # Brown/Beige spectrum
+        [139, 69, 19],   [160, 82, 45],   [205, 133, 63],  [210, 180, 140],
+        [222, 184, 135], [245, 222, 179], [244, 164, 96],  [188, 143, 143],
+        
         # Skin tones
-        [255, 220, 177], [255, 206, 180], [222, 171, 127], [188, 143, 107],
-        # Additional colors
-        [128, 0, 128],   [128, 128, 0],   [0, 128, 0],     [128, 0, 0],
-        [0, 0, 128],     [64, 64, 64]
+        [255, 220, 177], [255, 206, 180], [222, 171, 127], [188, 143, 107]
     ], dtype=np.uint8)
     
-    def __init__(self):
+    def __init__(self, use_true_color=False, adaptive_palette=False):
+        # Color mode settings
+        self.use_true_color = use_true_color
+        self.adaptive_palette = adaptive_palette
+        
+        # Initialize palette attributes first
+        self.current_palette = self.PALETTE.copy()
+        self.frame_buffer = []  # Buffer for adaptive palette calculation
+        
         # Get terminal size and calculate optimal resolution
         self.term_cols, self.term_rows = shutil.get_terminal_size((80, 24))
         
@@ -59,8 +89,17 @@ class SimplePixelPlayer:
         print(f"🎮 Resolution: {self.width}x{self.height // 2} characters")
         print(f"   Effective pixels: {self.width}x{self.height} (with half-blocks)")
         
-        # Build color lookup for fast processing
-        self._build_color_cache()
+        # Color mode info
+        if self.use_true_color:
+            print(f"🎨 Color mode: True Color (24-bit RGB)")
+        elif self.adaptive_palette:
+            print(f"🎨 Color mode: Adaptive Palette")
+        else:
+            print(f"🎨 Color mode: Fixed {len(self.PALETTE)}-color palette")
+        
+        # Build color lookup for fast processing (if not using true color)
+        if not self.use_true_color:
+            self._build_color_cache()
         
         # Frame timing - use lower FPS for terminal stability
         self.target_fps = 10  # Reduced for better terminal handling
@@ -69,12 +108,36 @@ class SimplePixelPlayer:
     def _build_color_cache(self):
         """Build KD-tree for fast color matching"""
         from scipy.spatial import KDTree
-        self.color_tree = KDTree(self.PALETTE)
+        self.color_tree = KDTree(self.current_palette)
         
     def find_closest_color(self, rgb: np.ndarray) -> np.ndarray:
         """Find closest palette color"""
         _, idx = self.color_tree.query(rgb)
-        return self.PALETTE[idx]
+        return self.current_palette[idx]
+    
+    def generate_adaptive_palette(self, frame: np.ndarray):
+        """Generate adaptive palette from frame using k-means clustering"""
+        from sklearn.cluster import MiniBatchKMeans
+        
+        # Sample pixels from frame for efficiency
+        h, w = frame.shape[:2]
+        sample_size = min(5000, h * w)
+        pixels = frame.reshape(-1, 3)
+        
+        # Random sampling
+        indices = np.random.choice(pixels.shape[0], sample_size, replace=False)
+        sample_pixels = pixels[indices]
+        
+        # Use k-means to find dominant colors
+        n_colors = len(self.PALETTE)
+        kmeans = MiniBatchKMeans(n_clusters=n_colors, random_state=42, n_init=3)
+        kmeans.fit(sample_pixels)
+        
+        # Update current palette
+        self.current_palette = kmeans.cluster_centers_.astype(np.uint8)
+        
+        # Rebuild color cache with new palette
+        self._build_color_cache()
     
     def process_frame(self, frame: np.ndarray) -> np.ndarray:
         """Process a frame with simplified pipeline"""
@@ -82,14 +145,23 @@ class SimplePixelPlayer:
         processed = cv2.resize(frame, (self.width, self.height), 
                                interpolation=cv2.INTER_AREA)
         
-        # 2. Apply simple dithering (ordered dithering for speed)
+        # 2. If using true color, return the resized frame directly
+        if self.use_true_color:
+            return processed
+        
+        # 3. Generate adaptive palette if enabled (every 30 frames)
+        if self.adaptive_palette and hasattr(self, 'frame_count'):
+            if self.frame_count % 30 == 0:
+                self.generate_adaptive_palette(processed)
+        
+        # 4. Apply simple dithering (ordered dithering for speed)
         processed = self.apply_dithering(processed)
         
-        # 3. Quantize to palette
+        # 5. Quantize to palette
         h, w = processed.shape[:2]
         processed_flat = processed.reshape(-1, 3)
         _, indices = self.color_tree.query(processed_flat)
-        processed = self.PALETTE[indices].reshape(h, w, 3)
+        processed = self.current_palette[indices].reshape(h, w, 3)
         
         return processed
     
@@ -185,6 +257,7 @@ class SimplePixelPlayer:
         
         try:
             frame_num = 0
+            self.frame_count = 0  # For adaptive palette
             start_time = time.time()
             
             while True:
@@ -201,6 +274,7 @@ class SimplePixelPlayer:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
                 # Process frame
+                self.frame_count = frame_num
                 processed = self.process_frame(frame)
                 
                 # Render and display

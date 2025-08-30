@@ -8,7 +8,10 @@ A terminal-based video player that transforms videos into high-quality pixel art
 - **YouTube Integration**: Automatically downloads and plays YouTube videos using yt-dlp
 - **Local File Support**: Plays any local video file supported by OpenCV
 - **Ultra-High Resolution**: Renders at 1120×560 characters (effectively 1120×1120 pixels using half-blocks)
-- **Optimized Color Palette**: Uses a carefully crafted 32-color palette for accurate video representation
+- **Multiple Color Modes**:
+  - **Extended Palette**: Default 64-color optimized palette with improved color coverage
+  - **True Color Mode**: Full 24-bit RGB without palette quantization for best quality
+  - **Adaptive Palette**: Dynamic palette that adjusts to video content every 30 frames
 - **Advanced Dithering**: Implements Bayer matrix ordered dithering for smooth gradients
 - **Synchronized Audio**: Plays audio through pygame with proper frame synchronization
 - **Adaptive Performance**: Maintains consistent 15 FPS playback with intelligent frame skipping
@@ -72,6 +75,14 @@ python pixelplay.py path/to/video.mp4
 
 **Supported formats:** MP4, AVI, MOV, MKV, and any format supported by OpenCV
 
+### Command Line Options
+
+- `--true-color`: Use true 24-bit RGB colors without palette quantization (best quality)
+- `--adaptive`: Use adaptive palette that dynamically adjusts to video content
+- `--help` or `-h`: Show help message with all available options
+
+**Note:** You cannot use `--true-color` and `--adaptive` simultaneously.
+
 ### Controls
 - **Ctrl+C**: Stop playback and exit
 - The player automatically cleans up temporary files after playback
@@ -79,14 +90,20 @@ python pixelplay.py path/to/video.mp4
 ### Examples
 
 ```bash
-# Play a YouTube music video
+# Play with default 64-color palette
 python pixelplay.py "https://youtube.com/watch?v=VIDEO_ID"
 
-# Play a local movie file
+# Play with true 24-bit RGB colors (best quality)
+python pixelplay.py video.mp4 --true-color
+
+# Play with adaptive palette that adjusts to content
+python pixelplay.py movie.mkv --adaptive
+
+# Play a local file with default settings
 python pixelplay.py ~/Movies/sample.mp4
 
-# Play a downloaded video
-python pixelplay.py downloaded_video.mkv
+# Show help message
+python pixelplay.py --help
 ```
 
 ## Technical Details
@@ -112,19 +129,33 @@ The project consists of two main components:
 1. **Frame Capture**: Uses OpenCV to read video frames
 2. **Resolution Scaling**: Resizes frames to target resolution using INTER_AREA interpolation
 3. **Dithering**: Applies 4×4 Bayer matrix ordered dithering for better gradients
-4. **Color Quantization**: Maps pixels to nearest palette color using scipy KD-tree
+4. **Color Processing**: Three modes available:
+   - **Palette Mode** (default): Maps pixels to nearest color in 64-color palette using scipy KD-tree
+   - **True Color Mode**: Preserves original 24-bit RGB values without quantization
+   - **Adaptive Palette Mode**: Dynamically generates optimal palette using k-means clustering
 5. **Half-Block Rendering**: Combines two vertical pixels into single Unicode character
 6. **ANSI Color Output**: Generates escape sequences for terminal display
 
 ### Color Palette
 
-The 32-color optimized palette includes:
-- **8 Grayscale levels**: From pure black to white for accurate brightness
-- **Primary colors**: Pure red, green, and blue
-- **Secondary colors**: Yellow, magenta, and cyan
-- **Warm tones**: Orange, browns, and skin tones
-- **Cool tones**: Blues and teals
-- **Additional colors**: For better coverage of common video content
+The expanded 64-color optimized palette includes:
+- **12 Grayscale levels**: Enhanced gradient representation from pure black to white
+- **Primary colors**: Multiple saturation levels for red, green, and blue
+- **Secondary colors**: Yellow, magenta, and cyan with variations
+- **Orange spectrum**: 4 shades for warm tones and skin colors
+- **Pink/Purple spectrum**: 4 shades for better color variety
+- **Blue/Cyan spectrum**: 8 shades for sky and water scenes
+- **Green spectrum**: 4 shades for nature content
+- **Brown/Beige tones**: 8 shades for earth tones and skin colors
+
+### Adaptive Palette Mode
+
+When using `--adaptive`, the player:
+1. Buffers 5 frames of video data
+2. Every 30 frames, analyzes the buffered frames
+3. Uses k-means clustering (via scikit-learn) to generate 64 optimal colors
+4. Smoothly transitions to the new palette for better color representation
+5. Particularly effective for videos with changing color schemes
 
 ### Performance Optimizations
 
@@ -146,6 +177,7 @@ The 32-color optimized palette includes:
 - **Pillow** (≥10.0.0): Additional image operations
 - **scipy** (≥1.11.0): KD-tree for color matching
 - **scikit-image** (≥0.22.0): Advanced image processing
+- **scikit-learn** (≥1.3.0): K-means clustering for adaptive palette generation
 
 ### Terminal UI
 - **colorama** (≥0.4.6): Cross-platform terminal colors
@@ -211,6 +243,25 @@ The player uses Unicode half-block characters (`▀` and `▄`) to double the ef
 - Lower pixel uses background color
 - Full blocks (`█`) used when both pixels are similar
 - Spaces used for very dark areas
+
+### Color Processing Modes
+
+**Default Palette Mode (64 colors)**:
+- Uses a carefully crafted palette with improved color coverage
+- Fast KD-tree based nearest neighbor search for color matching
+- Provides good balance between quality and performance
+
+**True Color Mode (`--true-color`)**:
+- Bypasses palette quantization entirely
+- Each pixel retains its original 24-bit RGB value
+- Best visual quality but may be slower on some terminals
+- Ideal for videos with subtle color gradients
+
+**Adaptive Palette Mode (`--adaptive`)**:
+- Analyzes video content in real-time
+- Generates optimal 64-color palette every 30 frames
+- Uses k-means clustering to find the most representative colors
+- Excellent for videos with distinct color themes or scene changes
 
 ### Bayer Dithering Algorithm
 
